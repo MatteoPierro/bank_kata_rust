@@ -47,7 +47,7 @@ impl<P: Printer, TR: TransactionsRepository> AccountService for Account<P, TR> {
             match transaction {
                 Transaction::Deposit(value) => {
                     total += value;
-                    result.push(format!("15/04/2025 || 100    || {total}    "))
+                    result.push(format!("15/04/2025 || {value}    || {total}    "))
                 }
             }
         }
@@ -146,7 +146,7 @@ mod tests {
             .in_sequence(&mut seq);
         printer
             .expect_print()
-            .with(eq("15/04/2025 || 100    || 200    "))
+            .with(eq("15/04/2025 || 200    || 300    "))
             .times(1)
             .returning(|_| ())
             .in_sequence(&mut seq);
@@ -163,7 +163,7 @@ mod tests {
             transactions_repository
         };
         account.deposit(100);
-        account.deposit(100);
+        account.deposit(200);
         account.print_statement();
     }
 }

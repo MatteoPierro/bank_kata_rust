@@ -33,13 +33,19 @@ struct Account<P: Printer, TR: TransactionsRepository, C: Calendar> {
 
 #[derive(Clone)]
 enum Transaction {
-    Deposit(String,u64),
+    Deposit {
+        date: String,
+        amount: u64
+    }
 }
 
 impl<P: Printer, TR: TransactionsRepository, C: Calendar> AccountService for Account<P, TR, C> {
     fn deposit(&mut self, value: u64) {
         self.transactions_repository
-            .add(Transaction::Deposit(self.calendar.today(), value));
+            .add(Transaction::Deposit {
+                date: self.calendar.today(),
+                amount: value
+            });
     }
 
     fn withdraw(&mut self, value: u64) {
@@ -52,9 +58,9 @@ impl<P: Printer, TR: TransactionsRepository, C: Calendar> AccountService for Acc
         let mut total = 0;
         for transaction in self.transactions_repository.all() {
             match transaction {
-                Transaction::Deposit(date,value) => {
-                    total += value;
-                    result.push(format!("{date} || {value}    || {total}    "))
+                Transaction::Deposit {amount, date} => {
+                    total += amount;
+                    result.push(format!("{date} || {amount}    || {total}    "))
                 }
             }
         }

@@ -1,4 +1,4 @@
-use mockall::automock;
+use mockall::{automock, Predicate};
 
 fn main() {
     println!("Hello, world!");
@@ -15,11 +15,11 @@ trait Printer {
     fn print(&self, line: &str);
 }
 
-struct Account {
-    printer: Box<dyn Printer>,
+struct Account<P: Printer> {
+    printer: P,
 }
 
-impl AccountService for Account {
+impl<P: Printer> AccountService for Account<P> {
     fn deposit(&self, value: u64) {
         todo!()
     }
@@ -45,8 +45,7 @@ mod tests {
     }
 
     #[test]
-
-    fn new_bank_account_statement() {
+    fn new_bank_account_statement_2() {
         let mut printer = MockPrinter::new();
         printer
             .expect_print()
@@ -54,7 +53,7 @@ mod tests {
             .times(1)
             .returning(|_| ());
         let account = Account {
-            printer: Box::new(printer),
+            printer,
         };
         account.print_statement();
     }

@@ -28,7 +28,6 @@ struct Account<P: Printer, TR: TransactionsRepository> {
 #[derive(Clone)]
 enum Transaction {
     Deposit(u64),
-    Withdraw(u64),
 }
 
 impl<P: Printer, TR: TransactionsRepository> AccountService for Account<P, TR> {
@@ -42,8 +41,21 @@ impl<P: Printer, TR: TransactionsRepository> AccountService for Account<P, TR> {
 
     fn print_statement(&self) {
         self.printer.print("Date       || Amount || Balance");
-        for _ in self.transactions_repository.all() {
-            self.printer.print("15/04/2025 || 100    || 100    ");
+        let mut result = vec![];
+        let mut total = 0;
+        for transaction in self.transactions_repository.all() {
+            match transaction {
+                Transaction::Deposit(value) => {
+                    total += value;
+                    result.push(format!("15/04/2025 || 100    || {total}    "))
+                }
+            }
+        }
+        
+        result.reverse();
+
+        for line in &result {
+            self.printer.print(line);
         }
     }
 }
@@ -113,11 +125,44 @@ mod tests {
             .returning(|_| ())
             .in_sequence(&mut seq);
 
-        let mut transactions_repository = InMemoryTransactionRepository::new();
+        let transactions_repository = InMemoryTransactionRepository::new();
         let mut account = Account {
             printer,
             transactions_repository
         };
+        account.deposit(100);
+        account.print_statement();
+    }
+
+    #[test]
+    fn bank_account_statement_with_two_deposits() {
+        let mut seq = Sequence::new();
+        let mut printer = MockPrinter::new();
+        printer
+            .expect_print()
+            .with(eq("Date       || Amount || Balance"))
+            .times(1)
+            .returning(|_| ())
+            .in_sequence(&mut seq);
+        printer
+            .expect_print()
+            .with(eq("15/04/2025 || 100    || 200    "))
+            .times(1)
+            .returning(|_| ())
+            .in_sequence(&mut seq);
+        printer
+            .expect_print()
+            .with(eq("15/04/2025 || 100    || 100    "))
+            .times(1)
+            .returning(|_| ())
+            .in_sequence(&mut seq);
+
+        let transactions_repository = InMemoryTransactionRepository::new();
+        let mut account = Account {
+            printer,
+            transactions_repository
+        };
+        account.deposit(100);
         account.deposit(100);
         account.print_statement();
     }

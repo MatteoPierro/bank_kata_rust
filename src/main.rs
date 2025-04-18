@@ -1,4 +1,4 @@
-use mockall::{automock, Predicate};
+use mockall::{Predicate, automock};
 
 fn main() {
     println!("Hello, world!");
@@ -20,19 +20,26 @@ trait TransactionsRepository {
     fn all(&self) -> Vec<Transaction>;
 }
 
-struct Account<P: Printer, TR: TransactionsRepository> {
+#[automock]
+trait Calendar {
+    fn today(&self) -> String;
+}
+
+struct Account<P: Printer, TR: TransactionsRepository, C: Calendar> {
     printer: P,
     transactions_repository: TR,
+    calendar: C,
 }
 
 #[derive(Clone)]
 enum Transaction {
-    Deposit(u64),
+    Deposit(String,u64),
 }
 
-impl<P: Printer, TR: TransactionsRepository> AccountService for Account<P, TR> {
+impl<P: Printer, TR: TransactionsRepository, C: Calendar> AccountService for Account<P, TR, C> {
     fn deposit(&mut self, value: u64) {
-        self.transactions_repository.add(Transaction::Deposit(value));
+        self.transactions_repository
+            .add(Transaction::Deposit(self.calendar.today(), value));
     }
 
     fn withdraw(&mut self, value: u64) {
@@ -45,13 +52,13 @@ impl<P: Printer, TR: TransactionsRepository> AccountService for Account<P, TR> {
         let mut total = 0;
         for transaction in self.transactions_repository.all() {
             match transaction {
-                Transaction::Deposit(value) => {
+                Transaction::Deposit(date,value) => {
                     total += value;
-                    result.push(format!("15/04/2025 || {value}    || {total}    "))
+                    result.push(format!("{date} || {value}    || {total}    "))
                 }
             }
         }
-        
+
         result.reverse();
 
         for line in &result {
@@ -62,9 +69,9 @@ impl<P: Printer, TR: TransactionsRepository> AccountService for Account<P, TR> {
 
 #[cfg(test)]
 mod tests {
-    use mockall::predicate::eq;
-    use mockall::Sequence;
     use super::*;
+    use mockall::Sequence;
+    use mockall::predicate::eq;
 
     #[test]
     fn it_works() {
@@ -74,14 +81,17 @@ mod tests {
     #[test]
     fn new_bank_account_statement() {
         let mut printer = MockPrinter::new();
+        let calendar = MockCalendar::new();
         printer
             .expect_print()
             .with(eq("Date       || Amount || Balance"))
             .times(1)
             .returning(|_| ());
+
         let account = Account {
             printer,
-            transactions_repository: InMemoryTransactionRepository::new()
+            transactions_repository: InMemoryTransactionRepository::new(),
+            calendar,
         };
         account.print_statement();
     }
@@ -92,9 +102,7 @@ mod tests {
 
     impl InMemoryTransactionRepository {
         fn new() -> Self {
-            InMemoryTransactionRepository {
-                records: vec![]
-            }
+            InMemoryTransactionRepository { records: vec![] }
         }
     }
 
@@ -111,6 +119,7 @@ mod tests {
     #[test]
     fn bank_account_statement_with_a_deposit() {
         let mut seq = Sequence::new();
+        let mut calendar = MockCalendar::new();
         let mut printer = MockPrinter::new();
         printer
             .expect_print()
@@ -125,10 +134,15 @@ mod tests {
             .returning(|_| ())
             .in_sequence(&mut seq);
 
+        calendar
+            .expect_today()
+            .returning(|| "15/04/2025".to_string());
+
         let transactions_repository = InMemoryTransactionRepository::new();
         let mut account = Account {
             printer,
-            transactions_repository
+            transactions_repository,
+            calendar,
         };
         account.deposit(100);
         account.print_statement();
@@ -137,6 +151,7 @@ mod tests {
     #[test]
     fn bank_account_statement_with_two_deposits() {
         let mut seq = Sequence::new();
+        let mut calendar = MockCalendar::new();
         let mut printer = MockPrinter::new();
         printer
             .expect_print()
@@ -157,10 +172,62 @@ mod tests {
             .returning(|_| ())
             .in_sequence(&mut seq);
 
+        calendar
+            .expect_today()
+            .returning(|| "15/04/2025".to_string());
+
         let transactions_repository = InMemoryTransactionRepository::new();
         let mut account = Account {
             printer,
-            transactions_repository
+            transactions_repository,
+            calendar,
+        };
+        account.deposit(100);
+        account.deposit(200);
+        account.print_statement();
+    }
+
+    #[test]
+    fn bank_account_statement_with_two_deposits_on_different_days() {
+        let mut seq = Sequence::new();
+        let mut seq_calendar = Sequence::new();
+        let mut printer = MockPrinter::new();
+        let mut calendar = MockCalendar::new();
+        printer
+            .expect_print()
+            .with(eq("Date       || Amount || Balance"))
+            .times(1)
+            .returning(|_| ())
+            .in_sequence(&mut seq);
+        printer
+            .expect_print()
+            .with(eq("16/04/2025 || 200    || 300    "))
+            .times(1)
+            .returning(|_| ())
+            .in_sequence(&mut seq);
+        printer
+            .expect_print()
+            .with(eq("15/04/2025 || 100    || 100    "))
+            .times(1)
+            .returning(|_| ())
+            .in_sequence(&mut seq);
+
+        calendar
+            .expect_today()
+            .returning(|| "15/04/2025".to_string())
+            .times(1)
+            .in_sequence(&mut seq_calendar);
+        calendar
+            .expect_today()
+            .returning(|| "16/04/2025".to_string())
+            .times(1)
+            .in_sequence(&mut seq_calendar);
+
+        let transactions_repository = InMemoryTransactionRepository::new();
+        let mut account = Account {
+            printer,
+            transactions_repository,
+            calendar,
         };
         account.deposit(100);
         account.deposit(200);
